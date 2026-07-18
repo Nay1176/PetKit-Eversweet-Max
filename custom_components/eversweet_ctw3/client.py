@@ -289,6 +289,15 @@ class CTW3BleClient:
             return
         # Async device-initiated push (cmd 230 FW/param update) — ack it
         if frame.cmd == CMD_DEVICE_UPDATE_PUSH and frame.type == TYPE_REQUEST:
+            # PATCH CTW3_100 : ce push embarque running_info (30 o) + settings
+            # (12 o). La cmd 211 ne repond pas sur ce modele : c'est notre
+            # SEULE source de settings. Meme recette que refresh_running().
+            if len(frame.data) >= 32:
+                try:
+                    self.state.settings = parse_settings(frame.data[30:])
+                    _LOGGER.debug("CTW3 settings extraits du push 230")
+                except Exception:  # noqa: BLE001
+                    _LOGGER.debug("Echec parse settings du push 230", exc_info=True)
             asyncio.create_task(
                 self._send_frame(
                     CMD_DEVICE_UPDATE_PUSH,
@@ -487,7 +496,12 @@ class CTW3BleClient:
     async def _refresh_all_unlocked(self) -> CTW3State:
         await self.refresh_battery()
         await self.refresh_running()
-        await self.refresh_settings()
+        # PATCH CTW3_100 : la cmd 211 ne repond jamais sur ce modele -> non
+        # fatal (les settings arrivent via le push 230, cf. _dispatch_frame).
+        try:
+            await self.refresh_settings()
+        except CTW3Timeout:
+            _LOGGER.debug("Settings (211) timed out (ignore sur CTW3_100)")
         try:
             await self.refresh_light_schedule()
         except CTW3Timeout:
@@ -518,7 +532,9 @@ class CTW3BleClient:
         return info
 
     async def refresh_settings(self) -> SettingsInfo:
-        frame = await self._request(CMD_SETTINGS)
+        # PATCH CTW3_100 : 8 s -> 3 s. Ce modele ne repond pas ; inutile de
+        # maintenir la connexion BLE ouverte pour rien a chaque poll.
+        frame = await self._request(CMD_SETTINGS, timeout=3.0)
         info = parse_settings(frame.data)
         self.state.settings = info
         return info

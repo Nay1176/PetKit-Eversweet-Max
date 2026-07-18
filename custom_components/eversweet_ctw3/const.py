@@ -97,5 +97,5 @@ CONF_NAME: Final = "name"
 CONF_DEVICE_ID: Final = "device_id"
 
 # --- Defaults ------------------------------------------------------------
-DEFAULT_SCAN_INTERVAL: Final = 60  # seconds
+DEFAULT_SCAN_INTERVAL: Final = 300  # seconds - PATCH CTW3_100 (scan_interval 60 -> 300, fontaine sur batterie)
 DEFAULT_SECRET_HEX: Final = "00000000000000000000000000000000"
